@@ -17,7 +17,6 @@
 
 ```bash
 cd intelligent-space-clearing-system/
-cd iscs/
 python engine.py
 ```
 
