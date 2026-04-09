@@ -1,142 +1,90 @@
 """
-engine.py — главная точка входа.
+engine.py — оркестратор системы
 
-Управляет сессией:
-    1. Показывает меню выбора сценария
-    2. Загружает тестовые данные
-    3. Запрашивает диапазон ячеек
-    4. Запускает алгоритм
-    5. Выводит результат
+Управляет порядком вызовов модулей:
+    cli → supervisor → blender → solver → cli
+
+Использование:
+    python engine.py
 """
 
-from algorithm import find_optimal_route
-from generator_1 import generate_scenario_1
-from generator_2 import generate_scenario_2
+from cli import (
+    show_welcome,
+    get_range_choice,
+    show_invalid_choice,
+    show_row2_disabled,
+    show_analyzing,
+    show_result,
+    ask_continue,
+    show_goodbye,
+)
+from supervisor import Supervisor
+from blender import Blender
+from solver import Solver
+from seeder.seeder import run as seed_run
+from warehouse_view import draw_warehouse
+
+import time
+
+# диапазоны, соответствующие пунктам меню
+RANGES = {
+    "1": ("P100", "P120"),
+    "2": ("P200", "P220"),
+}
 
 
-#  Вспомогательный вывод
+def run() -> None:
+    supervisor = Supervisor()
+    blender = Blender()
+    solver = Solver()
 
-
-def _header() -> None:
-    print("  MVP v0.1")
-
-
-def _divider() -> None:
-    print("-" * 5)
-
-
-#  Загрузка сценария
-
-
-def _load_scenario(choice: str) -> tuple[dict, dict, str] | None:
-    """
-    Загрузить тестовые данные выбранного сценария
-
-    Возвращает:
-        (cells, eos, default_range) или None если выбор неверный
-    """
-    if choice == "1":
-        print("\n  Загрузка сценария 1 (P100–P120)")
-        cells_list, eos_list = generate_scenario_1()
-        default_range = "P100-P120"
-
-    elif choice == "2":
-        print("\n  Загрузка сценария 2 (P200–P220)")
-        cells_list, eos_list = generate_scenario_2()
-        default_range = "P200-P220"
-
-    else:
-        return None
-
-    cells = {c.cell_id: c for c in cells_list}
-    eos = {e.eo_id: e for e in eos_list}
-
-    print(f"  Загружено: {len(cells)} ячеек, {len(eos)} ЕО")
-    return cells, eos, default_range
-
-
-#  Показ склада
-
-
-def _show_warehouse(cells: dict, range_str: str) -> None:
-    """Показать визуализацию ячеек диапазона"""
-    try:
-        parts = range_str.upper().replace(" ", "").split("-")
-        start = int(parts[0].lstrip("P"))
-        end = int(parts[1].lstrip("P"))
-    except Exception:
-        return
-
-    print(f"\n  Ячейки диапазона {range_str}:")
-    _divider()
-
-    range_cells = [
-        c for cid, c in cells.items()
-        if start <= int(cid.lstrip("P")) <= end
-    ]
-    range_cells.sort(key=lambda c: c.cell_id)
-
-    for cell in range_cells:
-        """
-        Для обработки заблокированных, зарезервированных и пр.ео
-        функционал еще не готов
-        """
-        bar = "█" * cell.occupancy + "░" * cell.free_space
-        status = "ЗАБЛОК" if cell.is_blocked else f"{cell.occupancy:>2}/{cell.capacity}"
-        print(f"  {cell.cell_id}: [{bar}] {status}")
-
-    _divider()
-
-
-def main() -> None:
-    _header()
+    show_welcome()
 
     while True:
-        # Выбор сценария
-        print("\n  Выберите тестовый сценарий:")
-        print("  [1] Сценарий 1 — диапазон P100–P120")
-        print("  [2] Сценарий 2 — диапазон P200–P220")
-        print("  [0] Выход")
-        print()
-
-        choice = input("  Ваш выбор: ").strip()
+        choice = get_range_choice()
 
         if choice == "0":
-            print("\n  До свидания. Я старался.\n")
+            show_goodbye()
             break
 
-        result = _load_scenario(choice)
-        if result is None:
-            print("  Неверный выбор. Попробуйте снова.")
+        if choice == "3":
+            seed_run()
+            print("Новый склад создан.")
             continue
 
-        cells, eos, default_range = result
+        if choice == "4":
+            draw_warehouse()
+            continue
 
-        # Ввод диапазона
-        print(f"\n  Диапазон по умолчанию: {default_range}")
-        raw = input(f"  Введите диапазон = нажать Enter !функционал не доделан!: ").strip()
-        range_str = raw if raw else default_range
+        if choice == "2":
+            show_row2_disabled()
+            continue
 
-        # Визуализация склада
-        _show_warehouse(cells, range_str)
+        if choice not in RANGES:
+            show_invalid_choice()
+            continue
 
-        # Запуск алгоритма
-        print(f"\n  Анализ диапазона {range_str}")
-        result = find_optimal_route(range_str, cells, eos)
+        start, end = RANGES[choice]
 
-        # Вывод результата
-        print("\n" + "-" * 5)
-        print("  РЕЗУЛЬТАТ АНАЛИЗА")
-        print("-" * 5)
-        print(result)
-        print("-" * 5)
+        show_analyzing()
 
-        # Продолжить?
-        print("\n  [Enter] Новый анализ  [0] Выход")
-        if input("  ").strip() == "0":
-            print("\n  До свидания. Я старался.\n")
+        start_time = time.perf_counter()
+        # пайплайн
+        source_cells = supervisor.get_source_cells(start, end)
+        source_eos = supervisor.get_source_eos(source_cells)
+        all_cells = supervisor.get_all_cells()
+        sources, warehouse = blender.prepare(source_cells, source_eos, all_cells)
+        result = solver.solve(sources, warehouse)
+
+        show_result(result)
+
+        result_time = time.perf_counter() - start_time
+        print(f"  Время за которое алгоритм выполнил работу: {result_time:.2f} секунд")
+
+        if not ask_continue():
+            show_goodbye()
             break
 
 
 if __name__ == "__main__":
-    main()
+    run()

@@ -23,12 +23,11 @@ B ↔ C: 1.85 - наискосок
 Для наглядности см. фото part_3, будут прикреплены к идее
 """
 
-from typing import Optional
-
 """
 Строки 31 - 52 захаркодены, для удобства реализации mvp
 В дальнейшем планируется заменить на динамическое изменение
 """
+
 BLOCK_RANGES: dict[str, tuple[int, int]] = {
     "A": (100, 110),
     "B": (111, 120),
@@ -53,16 +52,13 @@ COMPLEXITY_TABLE: dict[tuple[str, str], float] = {
 }
 
 
-def get_block(cell_id: str) -> Optional[str]:
+def get_block(cell_id: str) -> str | None:
     """
-    Определить блок (A/B/C/D) по идентификатору ячейки
+    Определить блок по идентификатору ячейки.
 
-    Примеры:
-        get_block("P105") → "A"
-        get_block("P115") → "B"
-        get_block("P205") → "C"
-        get_block("P215") → "D"
-        get_block("P999") → None  # Блок не обнаружен
+    get_block("P105") → "A"
+    get_block("P115") → "B"
+    get_block("P999") → None
     """
     try:
         number = int(cell_id.lstrip("P"))
@@ -78,18 +74,27 @@ def get_block(cell_id: str) -> Optional[str]:
 
 class ComplexityMatrix:
     """
-    Матрица сложности маршрутов между блоками склада
+    Матрица сложности маршрутов
+
+    Сейчас работает на захардкоденных константах
+    В будущем: BLOCK_RANGES и COMPLEXITY_TABLE грузятся из БД,
+    меняются через UI без разработчика
 
     Использование:
         matrix = ComplexityMatrix()
-        score = matrix.get_complexity("P105", "P215") # → 1.85
-        total_score = matrix.calculate_score("P105", "P215", 6) # → 11.1
+        score = matrix.get_complexity("P105", "P215") → 1.85
+        total = matrix.calculate_score("P105", "P215", 6) → 11.1
     """
 
     def get_complexity(self, from_cell: str, to_cell: str) -> float:
         """
-        Получить коэффициент сложности между двумя ячейками
-        Возвращает -1.0 если один из блоков неизвестен
+        Коэффициент сложности между двумя ячейками
+        Возвращает -1.0 если ячейка не принадлежит ни одному блоку
+
+        Использование:
+            matrix = ComplexityMatrix()
+            matrix.get_complexity("P105", "P215") → 1.85
+            matrix.get_complexity("P105", "P108") → 0.4
         """
         from_block = get_block(from_cell)
         to_block = get_block(to_cell)
@@ -101,41 +106,17 @@ class ComplexityMatrix:
 
     def calculate_score(self, from_cell: str, to_cell: str, eo_count: int) -> float:
         """
-        Рассчитать очки сложности для перемещения
+        Очки сложности для перемещения eo_count паллетов.
 
-        Формула: сложность * количество ЕО = очки
+        Формула: коэффициент * количество ЕО
+        Пример: P105 → P215, 6 ЕО → 1.85 * 6 = 11.1
 
-        Пример:
-            P105 → P215, 6 ЕО
-            блок A → блок D = 1.85
-            1.85 * 6 = 11.1 очков
+        Использование:
+            matrix = ComplexityMatrix()
+            matrix.calculate_score("P105", "P215", 6) → 11.1
+            matrix.calculate_score("P105", "P108", 10) → 4.0
         """
         complexity = self.get_complexity(from_cell, to_cell)
         if complexity < 0:
             return -1.0
         return round(complexity * eo_count, 2)
-
-    def show_table(self) -> None:
-        """Вывести матрицу сложности в терминал"""
-        blocks = ["A", "B", "C", "D"]
-        col_w = 8
-
-        print("\n  Матрица сложности маршрутов")
-        print("  " + "─" * (col_w * 5))
-
-        header = f"{'':>{col_w}}" + "".join(f"{b:>{col_w}}" for b in blocks)
-        print(header)
-
-        for from_b in blocks:
-            row = f"{from_b:>{col_w}}"
-            for to_b in blocks:
-                val = COMPLEXITY_TABLE.get((from_b, to_b), 0.0)
-                row += f"{val:>{col_w}.2f}"
-            print(row)
-
-        print("  " + "─" * (col_w * 5))
-        print()
-        print("  Диапазоны блоков:")
-        for block, (start, end) in BLOCK_RANGES.items():
-            print(f"    Блок {block}: P{start} – P{end}")
-        print()

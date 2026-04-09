@@ -1,19 +1,10 @@
 """
-models/ — пакет моделей данных.
+models/__init__.py — публичный интерфейс пакета models
 
-Импорт:
+Использование:
     from models import EO, Cell, ComplexityMatrix, get_block
 """
 
 from .eo import EO
 from .cell import Cell
-from .matrix import ComplexityMatrix, get_block, BLOCK_RANGES, COMPLEXITY_TABLE
-
-__all__ = [
-    "EO",
-    "Cell",
-    "ComplexityMatrix",
-    "get_block",
-    "BLOCK_RANGES",
-    "COMPLEXITY_TABLE",
-]
+from .matrix import ComplexityMatrix, get_block

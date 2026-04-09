@@ -11,33 +11,18 @@ cell.py — модель ячейки хранения
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.eo import EO
 
 
 @dataclass
 class Cell:
     cell_id: str
-    capacity: int  # максимум паллетов
-    eo_list: list[str] = field(default_factory=list)  # список eo_id
+    capacity: int  # вместимость в ячейке
+    eo_list: list["EO"] = field(default_factory=list)  # список eo_id
     is_blocked: bool = False
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Cell":
-        """Создать Cell из словаря (распарсенного JSON из SAP)"""
-        return cls(
-            cell_id=data["cell_id"],
-            capacity=data["capacity"],
-            eo_list=list(data.get("eo_list", [])),
-            is_blocked=data.get("is_blocked", False),
-        )
-
-    def to_dict(self) -> dict:
-        """Сериализовать Cell обратно в словарь"""
-        return {
-            "cell_id": self.cell_id,
-            "capacity": self.capacity,
-            "eo_list": self.eo_list,
-            "is_blocked": self.is_blocked,
-        }
 
     @property
     def occupancy(self) -> int:
@@ -49,12 +34,16 @@ class Cell:
         """Сколько свободных мест"""
         return self.capacity - self.occupancy
 
-    @property
-    def occupancy_pct(self) -> float:
-        """Заполненность в процентах"""
-        if self.capacity == 0:
-            return 0.0
-        return self.occupancy / self.capacity * 100
+    # В дальнейшем будет использоваться для
+    # контроля над утилизацией ячеек, в которые будут освобождаться ЕО
+    # из целевой ячейки
+
+    # @property
+    # def occupancy_percent(self) -> float:
+    #     """Заполненность в процентах"""
+    #     if self.capacity == 0:
+    #         return 0.0
+    #     return self.occupancy / self.capacity * 100
 
     @property
     def is_available(self) -> bool:
